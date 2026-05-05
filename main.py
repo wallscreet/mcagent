@@ -14,40 +14,43 @@ agent_system_instructions = "You are a helpful AI assistant named Juliet. You op
 
 
 def split_response(text: str, sender: str, max_chars: int = MAX_MSG_CHARS) -> list[str]:
-    """Split a long response into multiple numbered MeshCore-safe messages."""
+    """
+    Split a long response into numbered MeshCore-length-compliant messages.
+    Example output:
+      @[Sender] [1/3] This is the first part of the answer...
+      @[Sender] [2/3] Continuing with more content...
+    """
     prefix = f"@[{sender}] "
-    available = max_chars - len(prefix) - 8
+    available_chars = max_chars - len(prefix) - 10
 
-    if not text or len(text) <= available:
+    if not text or len(text.strip()) <= available_chars:
         return [prefix + text.strip()]
 
-    parts = []
     words = text.split()
+    parts = []
     current = []
-    part_num = 1
-    total_parts = 1
 
     for word in words:
         test_line = " ".join(current + [word])
-        if len(test_line) > available:
-            part_text = f"[ {part_num}/{total_parts} ] " + " ".join(current)
-            parts.append(prefix + part_text)
+        if len(test_line) > available_chars:
+            if current:
+                parts.append(" ".join(current))
             current = [word]
-            part_num += 1
         else:
             current.append(word)
 
     if current:
-        part_text = f"[ {part_num}/{total_parts} ] " + " ".join(current)
-        parts.append(prefix + part_text)
+        parts.append(" ".join(current))
 
-    total_parts = len(parts)
-    fixed_parts = []
-    for i, msg in enumerate(parts, 1):
-        fixed = msg.replace(f"/{total_parts} ", f"/{total_parts} ", 1)
-        fixed_parts.append(msg.replace(f"[ {i}/", f"[ {i}/", 1))
+    total = len(parts)
+    numbered_messages = []
 
-    return fixed_parts
+    for i, part_text in enumerate(parts, 1):
+        numbering = f"[ {i}/{total} ] "
+        final_message = prefix + numbering + part_text
+        numbered_messages.append(final_message)
+
+    return numbered_messages
 
 
 async def main():
@@ -130,7 +133,7 @@ async def main():
                 print(f"❌ Send failed: {result.payload}")
             else:
                 print(f"   Sent: {part[:80]}...")
-            await asyncio.sleep(1)
+            await asyncio.sleep(1.5)
 
     meshcore.subscribe(EventType.CONTACT_MSG_RECV, handle_message)
     meshcore.subscribe(EventType.CHANNEL_MSG_RECV, handle_message)
