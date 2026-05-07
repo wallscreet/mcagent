@@ -3,7 +3,8 @@ from meshcore import MeshCore, EventType
 from ai.clients import XAIClient
 
 SERIAL_PORT = "/dev/ttyUSB0"
-TCP_IP = input("Please enter MeshCore IP:")
+#TCP_IP = input("Please enter MeshCore IP:")
+TCP_IP = '192.168.4.2'
 TCP_PORT=5000
 ROOM_CONTACT_NAME = "Maplewood Room"
 
