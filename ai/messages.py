@@ -7,7 +7,7 @@ from collections import deque
 
 @dataclass
 class Message:
-    uuid: str # The uuid may actually be arbitrary here
+    uuid: str
     role: str
     speaker: str
     content: str

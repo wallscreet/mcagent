@@ -3,6 +3,8 @@ from meshcore import MeshCore, EventType
 from ai.clients import XAIClient
 
 SERIAL_PORT = "/dev/ttyUSB0"
+TCP_IP = input("Please enter MeshCore IP:")
+TCP_PORT=5000
 ROOM_CONTACT_NAME = "Maplewood Room"
 
 # Character limit for messages - Leave room for split message numbering (e.g [1/5])
@@ -54,7 +56,8 @@ def split_response(text: str, sender: str, max_chars: int = MAX_MSG_CHARS) -> li
 
 
 async def main():
-    meshcore = await MeshCore.create_serial(SERIAL_PORT, debug=True)
+    #meshcore = await MeshCore.create_serial(SERIAL_PORT, debug=True)
+    meshcore = await MeshCore.create_tcp(TCP_IP, TCP_PORT)
     print(f"✅ Connected on {SERIAL_PORT}")
     await meshcore.start_auto_message_fetching()
 
