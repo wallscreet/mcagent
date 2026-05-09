@@ -180,7 +180,7 @@ def split_response(text: str, sender: str, max_chars: int = MAX_MSG_CHARS) -> li
 #         print("✅ Disconnected.")
 
 async def main():
-    while True:  # Outer retry loop
+    while True:
         meshcore = None
         try:
             logger.info(f"Attempting to connect to Heltec on {SERIAL_PORT}...")
@@ -189,7 +189,6 @@ async def main():
             meshcore = await MeshCore.create_serial(
                 SERIAL_PORT, 
                 debug=True,
-                # Some versions support timeout/reconnect params - add if available
             )
             
             logger.info(f"✅ Successfully connected on {SERIAL_PORT}")
@@ -197,7 +196,6 @@ async def main():
 
             await meshcore.start_auto_message_fetching()
 
-            # === Your existing contact/room setup code ===
             contacts = {}
             short_to_name = {}
 
@@ -206,9 +204,13 @@ async def main():
                 contacts = result.payload
                 logger.info(f"Cached {len(contacts)} contacts")
                 print(f"Cached {len(contacts)} contacts")
-                # ... rest of your contact/short_to_name logic ...
+                
+                for full_key, contact in contacts.items():
+                    name = contact.get("adv_name")
+                    if name:
+                        short_to_name[full_key[:12]] = name
+                        short_to_name[full_key[:8]] = name
 
-            # Find room contact (your existing code)
             room_contact = None
             for key, contact in contacts.items():
                 if ROOM_CONTACT_NAME.lower() in contact.get("adv_name", "").lower():
@@ -223,10 +225,64 @@ async def main():
                 await asyncio.sleep(10)
                 continue
 
-            # Message handler (your existing function - unchanged)
             async def handle_message(event):
-                # ... your full handle_message code here (no changes needed) ...
-                pass
+                if event.type not in (EventType.CONTACT_MSG_RECV, EventType.CHANNEL_MSG_RECV):
+                    return
+
+                msg = event.payload
+                raw_text = msg.get("text", "").strip()
+                pubkey_prefix = msg.get("pubkey_prefix")
+                signature = msg.get("signature")
+
+                sender = "unknown"
+                if signature and signature in short_to_name:
+                    sender = short_to_name[signature]
+                elif pubkey_prefix and pubkey_prefix in short_to_name:
+                    sender = short_to_name[pubkey_prefix]
+
+                logger.info(f"[{event.type}] from {sender}: {raw_text}")
+                print(f"📥 [{event.type}] from {sender}: {raw_text}")
+
+                if "@!" not in raw_text.lower():
+                    return
+
+                user_prompt = raw_text
+                logger.info(f"Prompt received: {user_prompt}")
+                print(f"🤖 Prompt received: {user_prompt}")
+
+                # Get AI response
+                messages = [
+                    {"role": "system", "content": agent_system_instructions},
+                    {"role": "user", "content": user_prompt},
+                ]
+
+                try:
+                    agent_response = agent_client.get_response(
+                        model="grok-4-1-fast-non-reasoning",
+                        messages=messages
+                    )
+                    full_reply = agent_response.strip()
+                    logger.info(f"\nJuliet Response:\n{full_reply}\n")
+                    print(f"\n🤖 Juliet Response:\n{full_reply}\n")
+                except Exception as e:
+                    logger.info(f"AI Error: {e}")
+                    print(f"AI Error: {e}")
+                    full_reply = "Sorry, I had trouble reaching my brain."
+
+                messages_to_send = split_response(full_reply, sender, MAX_MSG_CHARS)
+
+                logger.info(f"Sending {len(messages_to_send)} part(s) to room...")
+                print(f"📤 Sending {len(messages_to_send)} part(s) to room...")
+
+                for part in messages_to_send:
+                    result = await meshcore.commands.send_msg(room_contact, part)
+                    if result.type == EventType.ERROR:
+                        logger.info(f"Send failed: {result.payload}")
+                        print(f"❌ Send failed: {result.payload}")
+                    else:
+                        logger.info(f"   Sent: {part[:80]}...")
+                        print(f"   Sent: {part[:80]}...")
+                    await asyncio.sleep(1.5)
 
             meshcore.subscribe(EventType.CONTACT_MSG_RECV, handle_message)
             meshcore.subscribe(EventType.CHANNEL_MSG_RECV, handle_message)
